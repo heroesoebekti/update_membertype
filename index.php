@@ -295,8 +295,6 @@ $classes = get_membership_type($dbs);
 
             const page = $(this).data('page');
             const listType = $(this).data('list-type');
-
-            console.log(page);
             if ($(this).parent().hasClass('disabled') || $(this).parent().hasClass('active')) {
                 return; 
             }
@@ -308,7 +306,6 @@ $classes = get_membership_type($dbs);
                 const classId = $('#destination_class').val();
                 loadMembers(classId, 'destination_member_list', 'destination_pagination', false, page);
             }
-
         });
 
         $('#select_all_members').on('change', function() {
@@ -345,7 +342,7 @@ $classes = get_membership_type($dbs);
             }).get();
 
             if (sourceClassId == destinationClassId) {
-                toastr.danger('The origin and destination membership types cannot be the same.', 'Membership', {timeOut: 5000});
+                toastr.error('The origin and destination membership types cannot be the same.', 'Membership', {timeOut: 5000});
                 return;
             }
 
@@ -375,11 +372,11 @@ $classes = get_membership_type($dbs);
                         $('#select_all_members').prop('checked', false);
                         checkMoveButtonState();
                     } else {
-                        toastr.danger(response.message, 'Membership', {timeOut: 5000});
+                        toastr.error(response.message, 'Membership', {timeOut: 5000});
                     }
                 },
                 error: function() {
-                    toastr.danger('An error occurred while communicating with the server.', 'Membership', {timeOut: 5000});
+                    toastr.error('An error occurred while communicating with the server.', 'Membership', {timeOut: 5000});
                 }
             });
         });
