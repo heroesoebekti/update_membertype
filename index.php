@@ -202,18 +202,6 @@ $classes = get_membership_type($dbs);
 
     <script>
     $(document).ready(function() {
-
-        function showAlert(message, type = 'success') {
-            const alertHtml = `
-                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
-                    ${message}
-                    <button type="button" class="btn btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>`;
-            $('#alert-container').html(alertHtml);
-            setTimeout(() => {
-                $('.alert').alert('close');
-            }, 5000);
-        }
         
         function renderPagination(totalPages, currentPage, paginationContainerId, listType) {
             const container = $(`#${paginationContainerId}`);
@@ -357,12 +345,12 @@ $classes = get_membership_type($dbs);
             }).get();
 
             if (sourceClassId == destinationClassId) {
-                showAlert('The origin and destination membership types cannot be the same.', 'danger');
+                toastr.danger('The origin and destination membership types cannot be the same.', 'Membership', {timeOut: 5000});
                 return;
             }
 
             if (memberIds.length === 0) {
-                showAlert('Please select at least one member to move.', 'warning');
+                toastr.warning('Please select at least one member to move.', 'Membership', {timeOut: 5000});
                 return;
             }
 
@@ -381,17 +369,17 @@ $classes = get_membership_type($dbs);
                 },
                 success: function(response) {
                     if (response.success) {
-                        showAlert(response.message, 'success');
+                        toastr.success(response.message, 'Membership', {timeOut: 5000});
                         loadMembers(sourceClassId, 'source_member_list', 'source_pagination', true, 1);
                         loadMembers(destinationClassId, 'destination_member_list', 'destination_pagination', false, 1);
                         $('#select_all_members').prop('checked', false);
                         checkMoveButtonState();
                     } else {
-                        showAlert(response.message, 'danger');
+                        toastr.danger(response.message, 'Membership', {timeOut: 5000});
                     }
                 },
                 error: function() {
-                    showAlert('An error occurred while communicating with the server.', 'danger');
+                    toastr.danger('An error occurred while communicating with the server.', 'Membership', {timeOut: 5000});
                 }
             });
         });
