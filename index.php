@@ -44,17 +44,24 @@ if (isset($_POST['action'])) {
     if ($_POST['action'] == 'get_members') {
         $class_id = $dbs->escape_string(isset($_POST['class_id']) ? (int)$_POST['class_id'] : 0);
         $page = $dbs->escape_string(isset($_POST['page']) ? (int)$_POST['page'] : 1);
-        $records_per_page = 10; 
+        $search = $dbs->escape_string(isset($_POST['search']) ? trim($_POST['search']) : '');
+        $records_per_page = 30; 
         $offset = ($page - 1) * $records_per_page;
         if ($class_id > 0) {
-            $t_m = $dbs->query("SELECT member_id FROM member WHERE member_type_id = '".$class_id."'");
+
+            $sub_query = '';
+             if (!empty($search)) {
+                $sub_query = " AND m.member_name LIKE '%" . $search . "%' ";
+            }
+                       
+            $t_m = $dbs->query("SELECT m.member_id FROM member m WHERE m.member_type_id = '".$class_id."' ".$sub_query);
             $total_records = $t_m->num_rows;
             $total_pages = ceil($total_records / $records_per_page);
             $members = [];
-            $member_q = $dbs->query("SELECT s.member_id, s.member_name, k.member_type_name 
-                FROM member s JOIN mst_member_type k ON s.member_type_id = k.member_type_id 
-                WHERE s.member_type_id = '".$class_id."' 
-                ORDER BY s.member_name ASC LIMIT $records_per_page OFFSET $offset");
+            $member_q = $dbs->query("SELECT m.member_id, m.member_name, k.member_type_name, m.input_date 
+                FROM member m JOIN mst_member_type k ON m.member_type_id = k.member_type_id 
+                WHERE m.member_type_id = '".$class_id."' ".$sub_query."
+                ORDER BY m.input_date ASC LIMIT $records_per_page OFFSET $offset");
                 if($member_q->num_rows > 0){
                     while ($a = $member_q->fetch_assoc()) {
                         $members[] = $a;
@@ -92,7 +99,7 @@ if (isset($_POST['action'])) {
                 $log = $dbs->query("INSERT IGNORE INTO membertype_log 
                     SELECT member_id, member_type_id, now(), '".$_SESSION['uid']."'
                     FROM member WHERE member_id = '".$memberID."'");
-                $update = $dbs->query("UPDATE member SET member_type_id = '".$destination_class_id."', last_update = '".date("Y-m-d")."' 
+                $update = $dbs->query("UPDATE member SET member_type_id = '".$destination_class_id."', last_update = '".date("Y-m-d H:i:s")."' 
                 WHERE member_id = '".$memberID."'");
                 if($update){
                     $success++;
@@ -150,6 +157,10 @@ $classes = get_membership_type($dbs);
                         <?= __('Members in the Origin membership type') ?>
                     </div>
                     <div class="card-body">
+                        <div class="mb-3 input-group">
+                             <span class="input-group-text"><i class="fa fa-search"></i></span>
+                            <input type="text" id="search_student" class="form-control" placeholder="Search Member Name...">
+                        </div>
                         <div class="mb-3">
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" id="select_all_members">
@@ -202,7 +213,7 @@ $classes = get_membership_type($dbs);
 
     <script>
     $(document).ready(function() {
-        
+        let searchDebounceTimer;
         function renderPagination(totalPages, currentPage, paginationContainerId, listType) {
             const container = $(`#${paginationContainerId}`);
             container.empty();
@@ -212,20 +223,57 @@ $classes = get_membership_type($dbs);
             }
 
             currentPage = parseInt(currentPage);
+            const maxButtons = 5;
 
             let prevDisabled = (currentPage === 1) ? 'disabled' : '';
             container.append(`<li class="page-item ${prevDisabled}"><div class="page-link" data-page="${currentPage - 1}" data-list-type="${listType}"><?= __('PREV') ?></div></li>`);
 
-            for (let i = 1; i <= totalPages; i++) {
+            let startPage, endPage;
+            if (totalPages <= maxButtons) {
+                startPage = 1;
+                endPage = totalPages;
+            } else {
+                const maxPagesBeforeCurrent = Math.floor(maxButtons / 2);
+                const maxPagesAfterCurrent = Math.ceil(maxButtons / 2) - 1;
+                if (currentPage <= maxPagesBeforeCurrent) {
+                    startPage = 1;
+                    endPage = maxButtons;
+                } else if (currentPage + maxPagesAfterCurrent >= totalPages) {
+                    startPage = totalPages - maxButtons + 1;
+                    endPage = totalPages;
+                } else {
+                    startPage = currentPage - maxPagesBeforeCurrent;
+                    endPage = currentPage + maxPagesAfterCurrent;
+                }
+            }
+
+            if (startPage > 1) {
+                container.append(`<li class="page-item"><div class="page-link" data-page="1" data-list-type="${listType}" style="cursor: pointer;">1</div></li>`);
+                if (startPage > 2) {
+                    container.append(`<li class="page-item disabled"><span class="page-link">...</span></li>`);
+                }
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
                 let activeClass = (i === currentPage) ? 'active' : '';
-                container.append(`<li class="page-item ${activeClass}"><div class="page-link" data-page="${i}" data-list-type="${listType}">${i}</div></li>`);
+                container.append(`<li class="page-item ${activeClass}"><div class="page-link" data-page="${i}" data-list-type="${listType}"  style="cursor: pointer;">${i}</div></li>`);
+            }
+
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    container.append(`<li class="page-item disabled"><span class="page-link">...</span></li>`);
+                }
+                container.append(`<li class="page-item"><div class="page-link" data-page="${totalPages}" data-list-type="${listType}"  style="cursor: pointer;">${totalPages}</a></li>`);
             }
 
             let nextDisabled = (currentPage === totalPages) ? 'disabled' : '';
-            container.append(`<li class="page-item ${nextDisabled}"><div class="page-link" data-page="${currentPage + 1}" data-list-type="${listType}"><?= __('NEXT')?></div></li>`);
+            container.append(`<li class="page-item ${nextDisabled}"><div class="page-link" data-page="${currentPage + 1}" data-list-type="${listType}"  style="cursor: pointer;"><?= __('NEXT')?></div></li>`);
         }
 
-        function loadMembers(classId, targetListId, paginationContainerId, isSource = false, page = 1) {
+
+
+
+        function loadMembers(classId, targetListId, paginationContainerId, isSource = false, page = 1, search = '') {
             const targetList = $(`#${targetListId}`);
             targetList.html('<p class="text-center text-muted mt-3"><i class="fa fa-spinner fa-spin"></i> Loading ...</p>');
             $(`#${paginationContainerId}`).empty(); 
@@ -243,7 +291,8 @@ $classes = get_membership_type($dbs);
                 data: {
                     action: 'get_members',
                     class_id: classId,
-                    page: page
+                    page: page,
+                    search: search
                 },
                 success: function(response) {
                     targetList.empty();
@@ -252,7 +301,7 @@ $classes = get_membership_type($dbs);
                             let memberHtml = '';
                             if (isSource) {
                                 memberHtml = `
-                                <label class="list-group-item list-group-item-action" style="padding-left: 35px;">
+                                <label class="list-group-item list-group-item-action" style="padding-left: 35px;margin-bottom:0px;">
                                     <input class="form-check-input member-checkbox" type="checkbox" value="${member.member_id}">
                                     <div class="member-info"><small> ${member.member_id}</small> - <strong>${member.member_name}</strong></div>
                                 </label>`;
@@ -288,6 +337,16 @@ $classes = get_membership_type($dbs);
             const classId = $(this).val();
             loadMembers(classId, 'destination_member_list', 'destination_pagination', false, 1);
             checkMoveButtonState();
+        });
+
+        // Event listener untuk input pencarian
+        $('#search_student').on('keyup', function() {
+            clearTimeout(searchDebounceTimer);
+            const searchTerm = $(this).val();
+            const classId = $('#source_class').val();
+            searchDebounceTimer = setTimeout(() => {
+                loadMembers(classId, 'source_member_list', 'source_pagination', true, 1, searchTerm);
+            }, 300);
         });
 
         $(document).on('click', '.pagination .page-link', function(e) {
